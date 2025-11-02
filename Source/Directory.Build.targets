@@ -11,6 +11,8 @@
         <!--Path to folder to be zipped. Needs to be relative to the project directory to work without changes to the 'BuildForCI' target.-->
         <ArtifactDestination>$(OutputPath)Final</ArtifactDestination>
         <ErrorOnMismatchedVersions Condition="'$(Configuration)' == 'Release'">True</ErrorOnMismatchedVersions>
+        <!-- Source file to include in the final artifact/zip -->
+        <LoginCookieSource>$(MSBuildThisFileDirectory)9_Resources\UserData\BeatLeader\Example_BeatLeader_LoginCookie.json</LoginCookieSource>
     </PropertyGroup>
     <!--Build Targets-->
     <!--Displays a warning if BeatSaberModdingTools.Tasks is not installed.-->
@@ -56,6 +58,13 @@
         <Message Text="::set-output name=artifactpath::$(ProjectDir)$(ArtifactDestination)" Importance="high"/>
         <Message Text="Copying '$(OutputAssemblyName).dll' to '$(ProjectDir)$(ArtifactDestination)\Plugins\$(AssemblyName).dll'" Importance="high"/>
         <Copy SourceFiles="$(OutputAssemblyName).dll" DestinationFiles="$(ProjectDir)$(ArtifactDestination)\Plugins\$(AssemblyName).dll"/>
+
+        <!-- Include UserData\BeatLeader\Example_BeatLeader_LoginCookie.json in CI artifact -->
+        <PropertyGroup>
+            <LoginCookieDestination>$(ProjectDir)$(ArtifactDestination)\UserData\BeatLeader\Example_BeatLeader_LoginCookie.json</LoginCookieDestination>
+        </PropertyGroup>
+        <MakeDir Directories="$(ProjectDir)$(ArtifactDestination)\UserData\BeatLeader" Condition="Exists('$(LoginCookieSource)')"/>
+        <Copy SourceFiles="$(LoginCookieSource)" DestinationFiles="$(LoginCookieDestination)" SkipUnchangedFiles="true" Condition="Exists('$(LoginCookieSource)')"/>
     </Target>
     <!--Creates a BeatMods compliant zip file with the release.-->
     <Target Name="ZipRelease" AfterTargets="Build" Condition="'$(DisableZipRelease)' != 'True' AND '$(Configuration)' == 'Release' AND '$(BSMTTaskAssembly)' != ''">
@@ -70,6 +79,14 @@
         <Copy SourceFiles="$(OutputAssemblyName).dll" DestinationFiles="$(ArtifactDestination)\Plugins\$(AssemblyName).dll"/>
         <Message Text="PluginVersion: $(PluginVersion), AssemblyVersion: $(AssemblyVersion), GameVersion: $(GameVersion)" Importance="high"/>
         <Delete Files="@(OldZips)" TreatErrorsAsWarnings="true" ContinueOnError="true"/>
+
+        <!-- Include UserData\BeatLeader\Example_BeatLeader_LoginCookie.json in Release zip -->
+        <PropertyGroup>
+            <LoginCookieDestination>$(ArtifactDestination)\UserData\BeatLeader\Example_BeatLeader_LoginCookie.json</LoginCookieDestination>
+        </PropertyGroup>
+        <MakeDir Directories="$(ArtifactDestination)\UserData\BeatLeader" Condition="Exists('$(LoginCookieSource)')"/>
+        <Copy SourceFiles="$(LoginCookieSource)" DestinationFiles="$(LoginCookieDestination)" SkipUnchangedFiles="true" Condition="Exists('$(LoginCookieSource)')"/>
+
         <ZipDir SourceDirectory="$(ArtifactDestination)" DestinationFile="$(DestinationDirectory)$(ArtifactName).zip"/>
     </Target>
     <!--Copies the assembly and pdb to the Beat Saber folder.-->
@@ -96,6 +113,28 @@
         <Message Text="Copying '$(OutputAssemblyName).dll' to '$(PluginDir)'." Importance="high" Condition="$(CanCopyToPlugins)"/>
         <Copy SourceFiles="$(OutputAssemblyName).dll" DestinationFiles="$(PluginDir)\$(AssemblyName).dll" Condition="$(CanCopyToPlugins)"/>
         <Copy SourceFiles="$(OutputAssemblyName).pdb" DestinationFiles="$(PluginDir)\$(AssemblyName).pdb" Condition="'$(CanCopyToPlugins)' == 'True' AND Exists('$(OutputAssemblyName).pdb')"/>
+
+        <!-- Also copy Example_BeatLeader_LoginCookie.json into Beat Saber UserData (only if a real cookie does not already exist) -->
+        <PropertyGroup>
+            <UserDataDir>$(BeatSaberDir)\UserData\BeatLeader</UserDataDir>
+            <UserDataDir Condition="'$(IsRunning)' == 'True'">$(BeatSaberDir)\IPA\Pending\UserData\BeatLeader</UserDataDir>
+        </PropertyGroup>
+        <Message Text="Copying 'Example_BeatLeader_LoginCookie.json' to '$(UserDataDir)'." Importance="high"
+                 Condition="'$(CanCopyToPlugins)' == 'True'
+                            AND Exists('$(LoginCookieSource)')
+                            AND Exists('$(BeatSaberDir)\UserData\BeatLeader\BeatLeader_LoginCookie.json') == false
+                            AND Exists('$(BeatSaberDir)\IPA\Pending\UserData\BeatLeader\BeatLeader_LoginCookie.json') == false"/>
+        <MakeDir Directories="$(UserDataDir)"
+                 Condition="'$(CanCopyToPlugins)' == 'True'
+                            AND Exists('$(LoginCookieSource)')
+                            AND Exists('$(BeatSaberDir)\UserData\BeatLeader\BeatLeader_LoginCookie.json') == false
+                            AND Exists('$(BeatSaberDir)\IPA\Pending\UserData\BeatLeader\BeatLeader_LoginCookie.json') == false"/>
+        <Copy SourceFiles="$(LoginCookieSource)" DestinationFiles="$(UserDataDir)\Example_BeatLeader_LoginCookie.json" SkipUnchangedFiles="true"
+              Condition="'$(CanCopyToPlugins)' == 'True'
+                         AND Exists('$(LoginCookieSource)')
+                         AND Exists('$(BeatSaberDir)\UserData\BeatLeader\BeatLeader_LoginCookie.json') == false
+                         AND Exists('$(BeatSaberDir)\IPA\Pending\UserData\BeatLeader\BeatLeader_LoginCookie.json') == false"/>
+
         <Warning Text="Beat Saber is running, restart the game to use the latest build." Condition="'$(IsRunning)' == 'True'"/>
     </Target>
 </Project>
