@@ -6,7 +6,7 @@ An open-source leaderboard System for Beat Saber with the trust issues removed.
 ## Usage
 
 - Download the zip for your game version from the [Releases](https://github.com/FroggMaster/beatleader-mod-ArrPatch/releases/) and extract it to your BeatSaber directory
-- Create a `BeatLeader_LoginCookie.json` in **\<BeatSaberDir\>\UserData\BeatLeader**
+- Rename the `Example_BeatLeader_LoginCookie.json` to `BeatLeader_LoginCookie.json` in **\<BeatSaberDir\>\UserData\BeatLeader**
 - Navigate to [BeatLeader Signin API Page](https://api.beatleader.com/signin)
 - Open the Developer console of your web browser with **Ctrl+Shift+I**
 - In the developer console click the Network Tab
