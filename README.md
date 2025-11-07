@@ -17,7 +17,7 @@ I've attached an example of what that looks like for the Steam login. <img width
 - Inside of `BeatLeader_LoginCookie.json` you'll need to add your cookieValue
     ```
     {
-      "cookieValue": "<Put_Your_Cookie_Value_Here>"
+      "cookieValue": "Put_Your_Cookie_Value_Here"
     }
     ```
 - Make sure to install and update all required [dependencies](#dependencies)
