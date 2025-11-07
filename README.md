@@ -10,7 +10,7 @@ An open-source leaderboard System for Beat Saber with the trust issues removed.
 - Navigate to [BeatLeader Signin API Page](https://api.beatleader.com/signin)
 - Open the Developer console of your web browser with **Ctrl+Shift+I**
 - In the developer console click the Network Tab
-- Click Connect using <Preferred Platform>
+- Click Connect using \<Preferred Platform\>
 - Go through the sign-in process as normal
 - Once you've signed in you will need to copy the Cookie Value for your login. You'll be looking for the request that starts with ```signin-```
 I've attached an example of what that looks like for the Steam login. <img width="2733" height="535" alt="image" src="https://github.com/user-attachments/assets/10178b60-3ce9-47f1-83c5-695217334385" />
