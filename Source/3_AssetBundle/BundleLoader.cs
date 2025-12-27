@@ -58,6 +58,7 @@ namespace BeatLeader {
         #region Materials
 
         public static Material LogoMaterial;
+        public static Material PrestigeIconMaterial;
         public static Material DefaultAvatarMaterial;
         public static Material UIAdditiveGlowMaterial;
         public static Material ScoreBackgroundMaterial;
@@ -69,6 +70,7 @@ namespace BeatLeader {
         public static Material VotingButtonMaterial;
         public static Material MiniProfileBackgroundMaterial;
         public static Material SkillTriangleMaterial;
+        public static Material ExperienceBarMaterial;
 
         public static Material UIGridMaterial;
         public static Material TextureSplitterMaterial;
@@ -85,6 +87,7 @@ namespace BeatLeader {
 
         private static void LoadMaterials(AssetBundle assetBundle) {
             LogoMaterial = assetBundle.LoadAsset<Material>("LogoMaterial");
+            PrestigeIconMaterial = assetBundle.LoadAsset<Material>("UIPrestigeIconMaterial");
             DefaultAvatarMaterial = assetBundle.LoadAsset<Material>("DefaultAvatar");
             UIAdditiveGlowMaterial = assetBundle.LoadAsset<Material>("UIAdditiveGlow");
             //UIAdditiveGlowMaterial.renderQueue = 4999;
@@ -99,6 +102,7 @@ namespace BeatLeader {
             UIGridMaterial = assetBundle.LoadAsset<Material>("UIGridMaterial");
             TextureSplitterMaterial = assetBundle.LoadAsset<Material>("TextureSplitterMaterial");
             SkillTriangleMaterial = assetBundle.LoadAsset<Material>("UISkillTriangleMaterial");
+            ExperienceBarMaterial = assetBundle.LoadAsset<Material>("UIExperienceBarMaterial");
             OpponentBackgroundMaterial = assetBundle.LoadAsset<Material>("UIOpponentBackgroundMaterial");
             OpponentScoreBackgroundMaterial = assetBundle.LoadAsset<Material>("UIOpponentScoreBackgroundMaterial");
             RoundTextureMaterial = assetBundle.LoadAsset<Material>("UIRoundTextureMaterial");
@@ -352,26 +356,18 @@ namespace BeatLeader {
         public static TMP_FontAsset NotoSansKRFontAsset;
         public static TMP_FontAsset MinecraftEnchantmentFontAsset;
 
-        private static readonly Dictionary<int, TMP_FontAsset> fontAssetsLookup = new();
-
-        public static bool TryGetFontAsset(int hashCode, ref TMP_FontAsset fontAsset) {
-            if (!fontAssetsLookup.ContainsKey(hashCode)) return false;
-            fontAsset = fontAssetsLookup[hashCode];
-            return true;
-        }
-
         private static TMP_FontAsset LoadFontAsset(this AssetBundle assetBundle, string name) {
             var asset = assetBundle.LoadAsset<TMP_FontAsset>(name);
-            if (asset != null) fontAssetsLookup[asset.hashCode] = asset;
+            if (asset != null) MaterialReferenceManager.AddFontAsset(asset);
             return asset;
         }
 
         private static void LoadFonts(AssetBundle assetBundle) {
-            NotoSansFontAsset = assetBundle.LoadFontAsset("NotoSans-SemiBold SDF");
-            NotoSansJPFontAsset = assetBundle.LoadFontAsset("NotoSansJP-SemiBold SDF");
-            NotoSansSCFontAsset = assetBundle.LoadFontAsset("NotoSansSC-SemiBold SDF");
-            NotoSansKRFontAsset = assetBundle.LoadFontAsset("NotoSansKR-SemiBold SDF");
-            MinecraftEnchantmentFontAsset = assetBundle.LoadFontAsset("minecraft-enchantment SDF");
+            NotoSansFontAsset = LoadFontAsset(assetBundle, "NotoSans-SemiBold SDF");
+            NotoSansJPFontAsset = LoadFontAsset(assetBundle, "NotoSansJP-SemiBold SDF");
+            NotoSansSCFontAsset = LoadFontAsset(assetBundle, "NotoSansSC-SemiBold SDF");
+            NotoSansKRFontAsset = LoadFontAsset(assetBundle, "NotoSansKR-SemiBold SDF");
+            MinecraftEnchantmentFontAsset = LoadFontAsset(assetBundle, "minecraft-enchantment SDF");
         }
 
         #endregion

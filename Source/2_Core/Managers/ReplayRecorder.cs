@@ -230,7 +230,7 @@ namespace BeatLeader {
 
             var frame = new Frame() {
                 time = _timeSyncController.songTime,
-                fps = Mathf.RoundToInt(1.0f / Time.deltaTime),
+                fps = Mathf.RoundToInt(Time.timeScale / Time.deltaTime),
                 head = new Models.Replay.Transform {
                     rotation = _origin.InverseTransformRotation(_head.rotation),
                     position = _origin.InverseTransformPoint(_head.position)
@@ -280,7 +280,7 @@ namespace BeatLeader {
 
             var xrRigTransform = new ReeTransform(xrRigOrigin.position, xrRigOrigin.rotation);
 
-            _vrPlatformHelper.GetNodePose(vrController._node, vrController._nodeIdx, out var controllerPos, out var controllerRot);
+            _vrPlatformHelper.GetNodePose(vrController._node, vrController._nodeIndex, out var controllerPos, out var controllerRot);
             controllerPos = xrRigTransform.LocalToWorldPosition(controllerPos);
             controllerRot = xrRigTransform.LocalToWorldRotation(controllerRot);
             var controllerTransform = new ReeTransform(controllerPos, controllerRot);
