@@ -21,65 +21,139 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Initialize modding environment
+      # Prefer the upstream (beat-forge) stripped refs. If the upstream does not
+      # publish the version we need, fall back to the Aeroluna mirror. If we do
+      # start from the upstream but the build does not succeed (e.g. its refs are
+      # virtualized and break the publicizer), the fallback block below rebuilds
+      # from the mirror instead.
+      - name: Select stripped references repository
+        id: refs
+        run: |
+          VERSION=$(grep -oP '"gameVersion"\s*:\s*"\K[^"]+' "$GITHUB_WORKSPACE/Source/manifest.json")
+          echo "Requested Beat Saber version: $VERSION"
+          PRIMARY="beat-forge/beatsaber-stripped"
+          FALLBACK="Aeroluna/beatsaber-stripped"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${PRIMARY}/branches/version/${VERSION}")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::${PRIMARY} has no version/${VERSION} branch (HTTP $STATUS); using ${FALLBACK}"
+            PRIMARY="$FALLBACK"
+          fi
+          echo "Primary refs repo: $PRIMARY"
+          echo "Fallback refs repo: $FALLBACK"
+          echo "primary=${PRIMARY}" >> "$GITHUB_OUTPUT"
+          echo "fallback=${FALLBACK}" >> "$GITHUB_OUTPUT"
+
+      - name: Initialize modding environment (primary)
+        id: init_primary
+        continue-on-error: true
         uses: beat-forge/init-beatsaber@v1
         with:
           token: ${{ github.token }}
-          repo: beat-forge/beatsaber-stripped
+          repo: ${{ steps.refs.outputs.primary }}
 
-      - name: Download Mod Dependencies
+      - name: Download Mod Dependencies (primary)
+        if: steps.init_primary.outcome == 'success'
         uses: Goobwabber/download-beatmods-deps@1.3
         with:
           manifest: ${{ github.workspace }}/Source/manifest.json
 
-      - name: Download Reactive.BeatSaberSDK
+      - name: Download Reactive.BeatSaberSDK (primary)
+        if: steps.init_primary.outcome == 'success'
         run: |
             echo "📦 Downloading Reactive.BeatSaberSDK..."
             curl -L "https://github.com/reactive-platform/beat-saber-sdk/releases/download/1.0.0/ReactiveUI_1.0.0_Release.zip" -o reactiveui.zip
-      
+
             # Extract to temp folder to inspect
             mkdir temp_extract
             unzip -o reactiveui.zip -d temp_extract
-      
-            echo "Contents of temp_extract:"
-            find temp_extract
-      
+
             # Copy to correct Refs folder structure
             mkdir -p "$GITHUB_WORKSPACE/Refs/Libs"
             mkdir -p "$GITHUB_WORKSPACE/Refs/Plugins"
-      
+
             echo "Copying Libs..."
             cp -rv temp_extract/Libs/* "$GITHUB_WORKSPACE/Refs/Libs/"
             echo "Copying Plugins..."
             cp -rv temp_extract/Plugins/* "$GITHUB_WORKSPACE/Refs/Plugins/"
-      
-            echo "Contents of Refs after copy:"
-            find "$GITHUB_WORKSPACE/Refs"
-      
+
             # Clean up
             rm -rf temp_extract reactiveui.zip
             echo "✅ Reactive.BeatSaberSDK extracted to $GITHUB_WORKSPACE/Refs"
 
-      - name: Build
+      - name: Build (primary)
         id: build
-        run: dotnet build --configuration Release
+        if: steps.init_primary.outcome == 'success'
+        continue-on-error: true
+        run: dotnet build --configuration Release -p:DisableZipRelease=false
+
+      # --- Fallback: upstream refs were missing or the primary build failed ---
+
+      - name: Reset References (fallback)
+        if: steps.init_primary.outcome != 'success' || steps.build.outcome == 'failure'
+        run: |
+          echo "::warning::Primary refs (${{ steps.refs.outputs.primary }}) unusable; rebuilding with ${{ steps.refs.outputs.fallback }}"
+          rm -rf "$GITHUB_WORKSPACE/Refs"
+
+      - name: Initialize modding environment (fallback)
+        if: steps.init_primary.outcome != 'success' || steps.build.outcome == 'failure'
+        uses: beat-forge/init-beatsaber@v1
+        with:
+          token: ${{ github.token }}
+          repo: ${{ steps.refs.outputs.fallback }}
+
+      - name: Download Mod Dependencies (fallback)
+        if: steps.init_primary.outcome != 'success' || steps.build.outcome == 'failure'
+        uses: Goobwabber/download-beatmods-deps@1.3
+        with:
+          manifest: ${{ github.workspace }}/Source/manifest.json
+
+      - name: Download Reactive.BeatSaberSDK (fallback)
+        if: steps.init_primary.outcome != 'success' || steps.build.outcome == 'failure'
+        run: |
+            echo "📦 Downloading Reactive.BeatSaberSDK..."
+            curl -L "https://github.com/reactive-platform/beat-saber-sdk/releases/download/1.0.0/ReactiveUI_1.0.0_Release.zip" -o reactiveui.zip
+
+            # Extract to temp folder to inspect
+            mkdir temp_extract
+            unzip -o reactiveui.zip -d temp_extract
+
+            # Copy to correct Refs folder structure
+            mkdir -p "$GITHUB_WORKSPACE/Refs/Libs"
+            mkdir -p "$GITHUB_WORKSPACE/Refs/Plugins"
+
+            echo "Copying Libs..."
+            cp -rv temp_extract/Libs/* "$GITHUB_WORKSPACE/Refs/Libs/"
+            echo "Copying Plugins..."
+            cp -rv temp_extract/Plugins/* "$GITHUB_WORKSPACE/Refs/Plugins/"
+
+            # Clean up
+            rm -rf temp_extract reactiveui.zip
+            echo "✅ Reactive.BeatSaberSDK extracted to $GITHUB_WORKSPACE/Refs"
+
+      - name: Build (fallback)
+        id: build_fallback
+        if: steps.init_primary.outcome != 'success' || steps.build.outcome == 'failure'
+        run: dotnet build --configuration Release -p:DisableZipRelease=false
 
       - name: Show Git Status
         run: git status
 
       - name: Echo Build Info
-        run: echo "Filename=${{ steps.build.outputs.filename }} (Assembly=${{ steps.build.outputs.assemblyname }})"
+        run: echo "Filename=${{ steps.build.outputs.filename || steps.build_fallback.outputs.filename }} (Assembly=${{ steps.build.outputs.assemblyname || steps.build_fallback.outputs.assemblyname }})"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.build.outputs.filename }}
-          path: ${{ steps.build.outputs.artifactpath }}
+          name: ${{ steps.build.outputs.filename || steps.build_fallback.outputs.filename }}
+          path: ${{ steps.build.outputs.artifactpath || steps.build_fallback.outputs.artifactpath }}
 
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ./${{ steps.build.outputs.filename }}.zip
+          files: Source/bin/Release/net48/zip/${{ steps.build.outputs.filename || steps.build_fallback.outputs.filename }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
