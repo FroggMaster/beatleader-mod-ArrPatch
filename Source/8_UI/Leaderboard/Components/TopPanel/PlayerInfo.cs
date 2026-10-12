@@ -1,7 +1,11 @@
 ﻿using BeatLeader.API;
+using BeatLeader.DataManager;
 using BeatLeader.Models;
+using BeatLeader.UI.Hub;
 using BeatSaberMarkupLanguage.Attributes;
+using HMUI;
 using JetBrains.Annotations;
+using UnityEngine;
 
 namespace BeatLeader.Components {
     internal class PlayerInfo : ReeUIComponentV2 {
@@ -13,11 +17,12 @@ namespace BeatLeader.Components {
         [UIValue("country-flag"), UsedImplicitly]
         private CountryFlag _countryFlag;
 
-        private User user;
+        private Player player;
 
         private void Awake() {
             _avatar = Instantiate<PlayerAvatar>(transform);
             _countryFlag = Instantiate<CountryFlag>(transform);
+            _prestigeIcon = Instantiate<PrestigeIcon>(transform);
         }
 
         #endregion
@@ -25,28 +30,36 @@ namespace BeatLeader.Components {
         #region Initialize/Dispose
 
         protected override void OnInitialize() {
+            _prestigeIcon.Size = 5;
+            
             UserRequest.StateChangedEvent += OnProfileRequestStateChanged;
             UploadReplayRequest.StateChangedEvent += OnUploadRequestStateChanged;
+            PrestigePanel.PrestigeWasPressedEvent += IncrementPrestigeIcon;
+            GlobalSettingsView.ExperienceBarConfigEvent += OnExperienceBarConfigChanged;
             PluginConfig.ScoresContextChangedEvent += ChangeScoreContext;
+            PrestigeLevelsManager.IconsLoadedEvent += OnPrestigeIconsLoaded;
         }
 
         protected override void OnDispose() {
             UserRequest.StateChangedEvent -= OnProfileRequestStateChanged;
             UploadReplayRequest.StateChangedEvent -= OnUploadRequestStateChanged;
+            PrestigePanel.PrestigeWasPressedEvent -= IncrementPrestigeIcon;
+            GlobalSettingsView.ExperienceBarConfigEvent -= OnExperienceBarConfigChanged;
             PluginConfig.ScoresContextChangedEvent -= ChangeScoreContext;
+            PrestigeLevelsManager.IconsLoadedEvent -= OnPrestigeIconsLoaded;
         }
 
         #endregion
 
         #region Events
 
-        private void OnUploadRequestStateChanged(WebRequests.IWebRequest<Score> instance, WebRequests.RequestState state, string? failReason) {
-            if (state is not WebRequests.RequestState.Finished) return;
-            OnProfileUpdated(instance.Result.Player);
-            user.player.contextExtensions = instance.Result.Player.contextExtensions;
+        private void OnUploadRequestStateChanged(WebRequests.IWebRequest<ScoreUploadResponse> instance, WebRequests.RequestState state, string? failReason) {
+            if (state is not WebRequests.RequestState.Finished || instance.Result.Status != ScoreUploadStatus.Uploaded) return;
+            OnProfileUpdated(instance.Result.Score.Player);
+            player.contextExtensions = instance.Result.Score.Player.contextExtensions;
         }
 
-        private void OnProfileRequestStateChanged(WebRequests.IWebRequest<User> instance, WebRequests.RequestState state, string? failReason) {
+        private void OnProfileRequestStateChanged(WebRequests.IWebRequest<Player> instance, WebRequests.RequestState state, string? failReason) {
             switch (state) {
                 case WebRequests.RequestState.Uninitialized:
                     OnProfileRequestFailed("Error");
@@ -58,8 +71,8 @@ namespace BeatLeader.Components {
                     OnProfileRequestStarted();
                     break;
                 case WebRequests.RequestState.Finished:
-                    user = instance.Result;
-                    OnProfileUpdated(instance.Result.player);
+                    player = instance.Result;
+                    OnProfileUpdated(player);
                     break;
                 default: return;
             }
@@ -80,6 +93,7 @@ namespace BeatLeader.Components {
             _avatar.SetAvatar(player.avatar, player.profileSettings);
 
             var contextPlayer = player.ContextPlayer(PluginConfig.ScoresContext);
+            SwapPrestigeIcon(player.prestige);
             NameText = FormatUtils.FormatUserName(player.name);
             GlobalRankText = FormatUtils.FormatRank(contextPlayer.rank, true);
             CountryRankText = FormatUtils.FormatRank(contextPlayer.countryRank, true);
@@ -89,8 +103,27 @@ namespace BeatLeader.Components {
 
         #endregion
 
+        private void IncrementPrestigeIcon() {
+            SwapPrestigeIcon(player.prestige + 1);
+        }
+
+        private void OnPrestigeIconsLoaded() {
+            if (player != null) {
+                SwapPrestigeIcon(player.prestige);
+            }
+        }
+
+        private void SwapPrestigeIcon(int prestige) {
+            _prestigeIcon.SetPrestige(prestige);
+            _prestigeIcon.SetActive(ConfigFileData.Instance.ExperienceBarEnabled);
+        }
+
+        private void OnExperienceBarConfigChanged(bool enable) {
+            _prestigeIcon.gameObject.SetActive(enable);
+        }
+
         private void ChangeScoreContext(int context) {
-            OnProfileUpdated(user.player);
+            OnProfileUpdated(player);
         }
 
         #region StatsActive
@@ -106,6 +139,13 @@ namespace BeatLeader.Components {
                 NotifyPropertyChanged();
             }
         }
+
+        #endregion
+
+        #region PrestigeIcon
+
+        [UIValue("prestige-icon"), UsedImplicitly]
+        private PrestigeIcon _prestigeIcon = null!;
 
         #endregion
 

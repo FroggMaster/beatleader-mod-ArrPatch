@@ -26,12 +26,13 @@ namespace BeatLeader.WebRequests {
             _sendCallback = sendCallback;
             _requestMessage = requestMessage;
             RequestParams = requestParams;
-            _requestTask = SendWebRequest(sendCallback, token);
-            _processTask = ProcessWebRequest(token);
             _requestResponseParser = requestResponseParser;
 
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
             _cancellationToken = _cancellationTokenSource.Token;
+
+            _requestTask = SendWebRequest(sendCallback, _cancellationToken);
+            _processTask = ProcessWebRequest(_cancellationToken);
         }
 
         public T? Result { get; private set; }
@@ -46,17 +47,16 @@ namespace BeatLeader.WebRequests {
             var contentLength = message.Content.Headers.ContentLength;
 
             byte[] contentBuffer;
-            if (contentLength == null || contentLength == 0) { 
-                contentBuffer = new byte[] { };
-            } else if (contentLength < 1000) {
-                contentBuffer = await message.Content.ReadAsByteArrayAsync();
+            if (contentLength == 0) {
+                contentBuffer = Array.Empty<byte>();
             } else {
-                contentBuffer = await DownloadContent(message.Content, token);
+                if (token.IsCancellationRequested) return RequestState.Failed;
+                contentBuffer = await Task.Run(() => DownloadContent(message.Content, token));
             }
             if (token.IsCancellationRequested) return RequestState.Failed;
             try {
                 if (_requestResponseParser != null) {
-                    Result = _requestResponseParser.ParseResponse(contentBuffer);
+                    Result = await Task.Run(() => _requestResponseParser.ParseResponse(contentBuffer), token);
                 }
             } catch (Exception ex) {
                 Plugin.Log.Error($"Failed to parse web request response!\n{ex}");
@@ -71,18 +71,27 @@ namespace BeatLeader.WebRequests {
             _treatReceivedProgressAsDownload = true;
 
             var descriptor = (IIoOperationDescriptor)this;
-            descriptor.ContentSize = content.Headers.ContentLength!.Value;
-            return await TransferContent(content, descriptor, token);
+            var knownLength = content.Headers.ContentLength;
+            if (knownLength != null) {
+                descriptor.ContentSize = knownLength.Value;
+                return await TransferContent(content, descriptor, knownLength.Value, token);
+            }
+
+            using var stream = await content.ReadAsStreamAsync();
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream, 81920, token);
+            return memoryStream.ToArray();
         }
 
         private static async Task<byte[]> TransferContent(
             HttpContent content,
             IIoOperationDescriptor descriptor,
+            long totalBytes,
             CancellationToken token
         ) {
             using var stream = await content.ReadAsStreamAsync();
             using var memoryStream = new MemoryStream();
-            await StreamUtils.CopyToByBufferAsync(stream, memoryStream, descriptor, token);
+            await StreamUtils.CopyToByBufferAsync(stream, memoryStream, descriptor, totalBytes, token);
             return memoryStream.ToArray();
         }
 
@@ -118,7 +127,7 @@ namespace BeatLeader.WebRequests {
             if (_treatReceivedProgressAsDownload) {
                 return (long)(size / RequestParams.DownloadTrackingPrecision);
             } else {
-                return (long)(size / RequestParams.UploadTrackingPrecision);;
+                return (long)(size / RequestParams.UploadTrackingPrecision);
             }
         }
 
@@ -181,13 +190,16 @@ namespace BeatLeader.WebRequests {
 
         private async Task<HttpResponseMessage?> SendWebRequest(SendRequestDelegate sendCallback, CancellationToken token) {
             var timeout = RequestParams.TimeoutSeconds;
-            var timeoutTokenSource = GetTimeoutTokenSource(TimeSpan.FromSeconds(timeout), token);
-            //
+            using var timeoutTokenSource = GetTimeoutTokenSource(TimeSpan.FromSeconds(timeout), token);
+            var linkedToken = timeoutTokenSource?.Token ?? token;
             try {
-                return await sendCallback(_requestMessage, CancellationTokenSource.CreateLinkedTokenSource(token, timeoutTokenSource?.Token ?? CancellationToken.None).Token);
-                //
+                return await sendCallback(_requestMessage, linkedToken);
             } catch (OperationCanceledException) when (!token.IsCancellationRequested) {
-                //
+                throw new TimeoutException($"The request has failed after {timeout}s");
+            } catch (WebException ex) when (
+                !token.IsCancellationRequested &&
+                ex.Status == WebExceptionStatus.RequestCanceled
+            ) {
                 throw new TimeoutException($"The request has failed after {timeout}s");
             }
         }
@@ -214,11 +226,12 @@ namespace BeatLeader.WebRequests {
         private readonly CancellationTokenSource _cancellationTokenSource;
 
         private async Task ProcessWebRequest(CancellationToken token) {
+            HttpResponseMessage? result = null;
             try {
-                Plugin.Log.Info($"[Request({_requestTask.GetHashCode()})]: {_requestMessage.RequestUri}");
+                Plugin.Log.Debug($"[Request({_requestTask.GetHashCode()})]: {_requestMessage.RequestUri}");
 
                 RequestState = RequestState.Started;
-                var result = await _requestTask;
+                result = await _requestTask;
                 if (_requestTask.IsFaulted || result is null) {
                     if (RetryAttempt < RequestParams.RetryCount) {
                         await Retry();
@@ -235,21 +248,30 @@ namespace BeatLeader.WebRequests {
 
                     RequestState = newState ?? RequestState.Finished;
 
-                    Plugin.Log.Info($"[Request({_requestTask.GetHashCode()})] Status code: {RequestStatusCode}");
+                    Plugin.Log.Debug($"[Request({_requestTask.GetHashCode()})] Status code: {RequestStatusCode}");
                 } else {
                     await ProcessFailure(result, null);
                 }
             } catch (Exception ex) {
                 await ProcessFailure(null, ex);
+            } finally {
+                result?.Dispose();   // important
+                _requestMessage.Dispose();
             }
+
             Dispose();
         }
 
         private async Task ProcessFailure(HttpResponseMessage? httpResponse, Exception? ex) {
             if (ex != null) {
                 RequestState = RequestState.Failed;
-                FailReason = "Exception occured, please report on Discord";
-                Plugin.Log.Info($"[Request({_requestTask.GetHashCode()})] Exception: {ex}");
+                if (ex is TaskCanceledException) {
+                    FailReason = "Request cancelled";
+                    Plugin.Log.Debug($"[Request({_requestTask.GetHashCode()})] Cancelled");
+                } else {
+                    FailReason = "Exception occured, please report on Discord";
+                    Plugin.Log.Info($"[Request({_requestTask.GetHashCode()})] Exception: {ex}");
+                }
             } else if (httpResponse != null) {
                 NetworkingUtils.GetRequestFailReason(httpResponse, out string failReason, out bool shouldRetry);
 

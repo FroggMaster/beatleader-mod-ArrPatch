@@ -22,7 +22,7 @@ I've attached an example of what that looks like for the Steam login. <img width
     ```
 - Make sure to install and update all required [dependencies](#dependencies)
 
-Go to the https://beatleader.xyz/ to see your scores on the web
+Go to the https://beatleader.com/ to see your scores on the web
 
 DO NOT DISCUSS ARRPATCH IN THE BEATLEADER DISCORD. If you have issues with logging on VIA `BeatLeader_LoginCookie.json` please create a [Github Issue](https://github.com/FroggMaster/beatleader-mod-ArrPatch/issues).
 For any issues actually related to BeatLeader go talk to their uptight admins.

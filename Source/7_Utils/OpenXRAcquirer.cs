@@ -36,6 +36,7 @@ namespace BeatLeader.Utils {
         }
 
         [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
+        [StructLayout(LayoutKind.Auto)]
         private struct XrSystemGetInfo {
             public XrStructureType type;
             public void* next;
@@ -43,6 +44,7 @@ namespace BeatLeader.Utils {
         }
 
         [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
+        [StructLayout(LayoutKind.Auto)]
         public struct XrSystemProperties {
             public XrStructureType type;
             public void* next;
@@ -54,6 +56,7 @@ namespace BeatLeader.Utils {
         }
 
         [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
+        [StructLayout(LayoutKind.Auto)]
         public struct XrSystemGraphicsProperties {
             public uint maxSwapchainImageHeight;
             public uint maxSwapchainImageWidth;
@@ -61,6 +64,7 @@ namespace BeatLeader.Utils {
         }
 
         [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
+        [StructLayout(LayoutKind.Auto)]
         public struct XrSystemTrackingProperties {
             public uint orientationTracking;
             public uint positionTracking;
@@ -76,7 +80,7 @@ namespace BeatLeader.Utils {
         }
 
         private const string DLLName = "openxr_loader";
-        private const long DLLGetLoaderInstanceFuncPtr = 0x00039480;
+        private const long DLLGetLoaderInstanceFuncPtr = 0x00038610;
 
         public static XrSystemProperties? SystemProperties { get; private set; }
         public static string? SystemName { get; private set; }
@@ -134,8 +138,8 @@ namespace BeatLeader.Utils {
             {
                 buffer[i] = Marshal.ReadByte(funcAddress, i);
             }
-            string result = Encoding.ASCII.GetString(buffer);
-            if (result != "H??(eH?") { return null; }
+            string result = Convert.ToBase64String(buffer);
+            if (result != "SIPsKIsNonA=") { return null; }
 
             var getLoaderInstanceFunc = Marshal.GetDelegateForFunctionPointer<XrInstanceFuncDelegate>(funcAddress);
             if (getLoaderInstanceFunc == null) throw new InvalidPointerException(funcAddress);

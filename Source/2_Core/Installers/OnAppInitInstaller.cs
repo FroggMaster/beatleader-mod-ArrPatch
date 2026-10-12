@@ -2,8 +2,7 @@
 using BeatLeader.DataManager;
 using BeatLeader.Utils;
 using JetBrains.Annotations;
-using System.Linq;
-using System.Reflection;
+using OculusStudios.Platform.Core;
 using System.Runtime.InteropServices;
 using Zenject;
 
@@ -12,15 +11,13 @@ namespace BeatLeader.Installers {
     public class OnAppInitInstaller : Installer<OnAppInitInstaller> {
         [Inject, UsedImplicitly]
         private IVRPlatformHelper _vrPlatformHelper = null!;
+        [Inject, UsedImplicitly]
+        private IPlatform _platform = null!;
 
         public override void InstallBindings() {
             Plugin.Log.Debug("OnAppInitInstaller");
-            
-            var steamPlatformUserModel = Assembly.GetAssembly(typeof(IPlatformUserModel))
-                .GetTypes()
-                .FirstOrDefault(t => t.FullName!.Contains("SteamPlatformUserModel"));
-            
-            if (steamPlatformUserModel != null) {
+
+            if (_platform != null && _platform.vendor == Vendor.Valve) {
                 Authentication.SetPlatform(Authentication.AuthPlatform.Steam);
             } else {
                 Authentication.SetPlatform(Authentication.AuthPlatform.OculusPC);
@@ -31,9 +28,12 @@ namespace BeatLeader.Installers {
                 OpenXRAcquirer.Init(_vrPlatformHelper.vrPlatformSDK);
             }
 
-            Container.BindInterfacesAndSelfTo<LeaderboardContextsManager>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
             Container.BindInterfacesAndSelfTo<LeaderboardManager>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
             Container.BindInterfacesAndSelfTo<PlaylistsManager>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
+
+            MapTypesManager.Initialize();
+            LeaderboardContextsManager.Initialize();
+            PrestigeLevelsManager.Initialize();
 
             Container.BindInterfacesAndSelfTo<ProfileManager>().AsSingle();
             Container.BindInterfacesAndSelfTo<ScoreStatsManager>().AsSingle();

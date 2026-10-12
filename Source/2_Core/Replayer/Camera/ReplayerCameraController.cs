@@ -78,7 +78,7 @@ namespace BeatLeader.Replayer {
             DestroyImmediate(camera.GetComponent<SmoothCamera>());
 
             camera.nearClipPlane = 0.01f;
-            camera.farClipPlane = 5000;
+            camera.farClipPlane = 20000;
             //appending avatar layer
             camera.cullingMask |= 1 << 10;
             camera.gameObject.SetActive(true);
@@ -121,8 +121,8 @@ namespace BeatLeader.Replayer {
 
         private void LoadSettings() {
             var cameraSettings = _launchData.Settings.CameraSettings;
-            var views = cameraSettings!.CameraViews;
-            if (views == null) return;
+            var views = cameraSettings.CameraViews;
+           
             foreach (var view in views) {
                 _diContainer.Inject(view);
                 _views.Add(view);
@@ -136,7 +136,7 @@ namespace BeatLeader.Replayer {
         }
 
         private void Awake() {
-            if (_launchData.Settings.CameraSettings == null) {
+            if (_launchData.DisableBuiltinCamera) {
                 // Prevent Start from being called
                 enabled = false;
                 return;

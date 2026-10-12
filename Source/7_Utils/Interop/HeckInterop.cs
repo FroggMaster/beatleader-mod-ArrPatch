@@ -2,10 +2,9 @@
 using System.Linq;
 using System.Reflection;
 using BeatLeader.Attributes;
-using BeatLeader.Utils;
 
 namespace BeatLeader.Interop {
-    [PluginInterop("_Heck")]
+    [PluginInterop("Heck")]
     internal static class HeckInterop {
         [PluginState]
         public static bool IsInstalled { get; private set; }
@@ -15,10 +14,13 @@ namespace BeatLeader.Interop {
 
         [PluginType("Heck.PlayView.IPlayViewController")]
         public static Type? PlayViewControllerType { get; private set; }
-
-        [PluginType("Heck.SettingsSetter.SettingsSetterViewController")]
-        public static Type? SetterViewControllerType { get; private set; }
-
+        
+        [PluginType("Heck.PlayView.PlayViewManager")]
+        public static Type? PlayViewManagerType { get; private set; }
+        
+        [PluginType("Heck.PlayView.PlayViewManager+PlayViewControllerData")]
+        public static Type? PlayViewControllerDataType { get; private set; }
+        
         [PluginType("Heck.PlayView.StartStandardLevelParameters")]
         private static Type _startParametersType = null!;
 
@@ -48,20 +50,19 @@ namespace BeatLeader.Interop {
                     beatmapKey,
                     beatmapLevel,
                     overrideEnvironmentSettings,
-                    null,
-                    null,
+                    null, // overrideColorScheme
+                    null, // playerOverrideLightshowColors
                     gameplayModifiers,
                     playerSpecificSettings,
-                    null,
-                    null,
-                    string.Empty,
-                    false,
-                    false,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
+                    null, // practiceSettings
+                    null, // environmentsListModel
+                    null, // gameplayAdditionalInformation
+                    null, // beforeSceneSwitchToGameplayCallback
+                    null, // afterSceneSwitchToGameplayCallback
+                    null, // levelFinishedCallback
+                    null, // levelRestartedCallback
+                    null, // beatmapLevelData
+                    null  // recordingToolData
                 }
             );
         }
