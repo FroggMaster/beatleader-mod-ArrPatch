@@ -138,22 +138,94 @@ jobs:
         if: steps.init_primary.outcome != 'success' || steps.build.outcome == 'failure'
         run: dotnet build --configuration Release -p:DisableZipRelease=false
 
+      - name: Apply upstream release naming
+        id: name
+        run: |
+          VER=$(grep -oP '"version"\s*:\s*"\K[^"]+' "$GITHUB_WORKSPACE/Source/manifest.json")
+          GV=$(grep -oP '"gameVersion"\s*:\s*"\K[^"]+' "$GITHUB_WORKSPACE/Source/manifest.json")
+          GV=${GV%.0}
+          NAME="BeatLeader-${VER}-bs${GV}+"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          ZIPDIR="$GITHUB_WORKSPACE/Source/bin/Release/net48/zip"
+          SRC=$(ls "$ZIPDIR"/BeatLeader-*.zip | head -n 1)
+          mv "$SRC" "$ZIPDIR/${NAME}.zip"
+          echo "Renamed $(basename "$SRC") -> ${NAME}.zip"
+
+      # --- 1.40.2 line (ArrPatch, built from the fork's own 1.40.2 branch) ---
+      # Only needed when cutting a release (tag), so it is skipped otherwise.
+      - name: Checkout 1.40.2 line
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/checkout@v3
+        with:
+          ref: 1.40.2
+          path: arrpatch-1.40.2
+
+      - name: Initialize references for 1.40.2
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: beat-forge/init-beatsaber@v1
+        with:
+          token: ${{ github.token }}
+          repo: Aeroluna/beatsaber-stripped
+          version: 1.40.2
+          path: ${{ github.workspace }}/refs1402
+
+      - name: Download Mod Dependencies for 1.40.2
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: Goobwabber/download-beatmods-deps@1.3
+        with:
+          manifest: ${{ github.workspace }}/arrpatch-1.40.2/Source/manifest.json
+          path: ${{ github.workspace }}/refs1402
+
+      - name: Download Reactive.BeatSaberSDK for 1.40.2
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "📦 Downloading Reactive.BeatSaberSDK (1.40.2)..."
+          curl -L "https://github.com/reactive-platform/beat-saber-sdk/releases/download/1.0.0/ReactiveUI_1.0.0_Release.zip" -o reactiveui.zip
+          mkdir temp_extract
+          unzip -o reactiveui.zip -d temp_extract
+          mkdir -p "$GITHUB_WORKSPACE/refs1402/Libs"
+          mkdir -p "$GITHUB_WORKSPACE/refs1402/Plugins"
+          cp -rv temp_extract/Libs/* "$GITHUB_WORKSPACE/refs1402/Libs/"
+          cp -rv temp_extract/Plugins/* "$GITHUB_WORKSPACE/refs1402/Plugins/"
+          rm -rf temp_extract reactiveui.zip
+          echo "✅ Reactive.BeatSaberSDK extracted to $GITHUB_WORKSPACE/refs1402"
+
+      - name: Build 1.40.2
+        if: startsWith(github.ref, 'refs/tags/')
+        run: dotnet build arrpatch-1.40.2/Source/BeatLeader.csproj --configuration Release -p:BeatSaberDir="$GITHUB_WORKSPACE/refs1402" -p:DisableZipRelease=false
+
+      - name: Apply upstream release naming (1.40.2)
+        id: name1402
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VER=$(grep -oP '"version"\s*:\s*"\K[^"]+' "$GITHUB_WORKSPACE/arrpatch-1.40.2/Source/manifest.json")
+          GV=$(grep -oP '"gameVersion"\s*:\s*"\K[^"]+' "$GITHUB_WORKSPACE/arrpatch-1.40.2/Source/manifest.json")
+          GV=${GV%.0}
+          NAME="BeatLeader-${VER}-bs${GV}+"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          ZIPDIR="$GITHUB_WORKSPACE/arrpatch-1.40.2/Source/bin/Release/net48/zip"
+          SRC=$(ls "$ZIPDIR"/BeatLeader-*.zip | head -n 1)
+          mv "$SRC" "$ZIPDIR/${NAME}.zip"
+          echo "Renamed $(basename "$SRC") -> ${NAME}.zip"
+
       - name: Show Git Status
         run: git status
 
       - name: Echo Build Info
-        run: echo "Filename=${{ steps.build.outputs.filename || steps.build_fallback.outputs.filename }} (Assembly=${{ steps.build.outputs.assemblyname || steps.build_fallback.outputs.assemblyname }})"
+        run: echo "Artifact=${{ steps.name.outputs.name }} (Assembly=${{ steps.build.outputs.assemblyname || steps.build_fallback.outputs.assemblyname }})"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.build.outputs.filename || steps.build_fallback.outputs.filename }}
-          path: ${{ steps.build.outputs.artifactpath || steps.build_fallback.outputs.artifactpath }}
+          name: ${{ steps.name.outputs.name }}
+          path: Source/bin/Release/net48/zip/${{ steps.name.outputs.name }}.zip
 
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: Source/bin/Release/net48/zip/${{ steps.build.outputs.filename || steps.build_fallback.outputs.filename }}.zip
+          files: |
+            Source/bin/Release/net48/zip/${{ steps.name.outputs.name }}.zip
+            arrpatch-1.40.2/Source/bin/Release/net48/zip/${{ steps.name1402.outputs.name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
